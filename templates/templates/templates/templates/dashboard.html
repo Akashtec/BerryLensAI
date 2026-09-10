@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Dashboard | BerryLens AI{% endblock %}
+{% block content %}
+<h2 style="margin-bottom: 1.5rem; color: #f0f6fc;">Analytics Dashboard</h2>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.total_claims }}</div>
+        <div class="stat-label">Total Claims</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.total_verdicts }}</div>
+        <div class="stat-label">Verdicts</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.avg_confidence }}%</div>
+        <div class="stat-label">Avg Confidence</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.pending }}</div>
+        <div class="stat-label">Pending</div>
+    </div>
+</div>
+
+<div class="card">
+    <h3 style="margin-bottom: 1rem; color: #f0f6fc;">Verdict Distribution</h3>
+    {% if stats.verdict_counts %}
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        {% for verdict, count in stats.verdict_counts.items() %}
+        <div style="background: #0d1117; padding: 1.25rem 1.75rem; border-radius: 10px; border-left: 4px solid #58a6ff; min-width: 140px;">
+            <p style="font-size: 1.75rem; font-weight: 800; color: #f0f6fc;">{{ count }}</p>
+            <p style="color: #8b949e; font-size: 0.875rem; margin-top: 0.25rem;">{{ verdict }}</p>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p style="color: #8b949e;">No verdict data yet. Start verifying claims!</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h3 style="margin-bottom: 1rem; color: #f0f6fc;">Recent Activity</h3>
+    {% if claims %}
+    <table>
+        <thead>
+            <tr>
+                <th>Claim</th>
+                <th>Verdict</th>
+                <th>Confidence</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for claim in claims[:10] %}
+            <tr>
+                <td>{{ claim.text[:45] }}{% if claim.text|length > 45 %}...{% endif %}</td>
+                <td>
+                    {% if claim.verdict %}
+                    <span class="verdict-{{ claim.verdict.lower().replace(' ', '-') }}" style="font-weight: 600;">{{ claim.verdict }}</span>
+                    {% else %}—{% endif %}
+                </td>
+                <td>{% if claim.confidence %}{{ claim.confidence }}%{% else %}—{% endif %}</td>
+                <td><span class="tag tag-{{ claim.status }}">{{ claim.status.upper() }}</span></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #8b949e;">No activity yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

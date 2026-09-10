@@ -1,0 +1,3 @@
+{% extends 'base.html' %}
+{% block title %}BerryLens AI | History{% endblock %}
+{% block content %}<div class="muted mono">ARCHIVE</div><h2>Fact-check history</h2><section class="card" style="margin-top:1.5rem;overflow:auto"><table><thead><tr><th>Claim</th><th>Verdict</th><th>Confidence</th><th>Status</th><th>Created</th></tr></thead><tbody>{% for claim in claims %}<tr><td>{{ claim.text }}</td><td class="tag">{{ claim.verdict or 'PENDING' }}</td><td class="mono">{{ claim.confidence if claim.confidence is not none else '-' }}%</td><td>{{ claim.status }}</td><td class="muted">{{ claim.created_at }}</td></tr>{% else %}<tr><td colspan="5" class="muted">No claims yet.</td></tr>{% endfor %}</tbody></table></section>{% endblock %}

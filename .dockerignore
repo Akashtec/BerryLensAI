@@ -1,0 +1,13 @@
+.env
+venv/
+__pycache__/
+*.pyc
+*.db
+chroma_db/
+.git/
+.pytest_cache/
+tests/
+docs/
+requirements-dev.txt
+*.md
+*.zip

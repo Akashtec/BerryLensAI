@@ -1,0 +1,7 @@
+{
+  "version": "1.0",
+  "tier_1": ["reuters.com", "apnews.com", "bbc.com", "who.int", "nature.com"],
+  "tier_2": ["theguardian.com", "nytimes.com", "thehindu.com", "ndtv.com"],
+  "tier_3": ["wikipedia.org", "snopes.com", "factcheck.org"],
+  "blacklist": ["beforeitsnews.com", "naturalnews.com", "infowars.com"]
+}

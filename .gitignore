@@ -1,0 +1,31 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Virtual environments and Python caches
+venv/
+.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# Local databases and vector-store data
+*.db
+*.db-*
+chroma_db/
+
+# Generated artifacts and logs
+__pycache__.zip
+*.log
+.coverage
+htmlcov/
+
+# Editor and OS files
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

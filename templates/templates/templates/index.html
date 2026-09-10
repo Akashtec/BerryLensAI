@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.total_claims }}</div>
+        <div class="stat-label">Total Claims</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.total_verdicts }}</div>
+        <div class="stat-label">Verdicts</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.avg_confidence }}%</div>
+        <div class="stat-label">Avg Confidence</div>
+    </div>
+</div>
+
+<div class="card">
+    <h2 style="margin-bottom: 1rem; color: #f0f6fc;">Verify a News Claim</h2>
+    <form action="{{ url_for('verify') }}" method="POST">
+        <div style="margin-bottom: 1rem;">
+            <textarea name="claim" rows="3" placeholder="Enter a news claim to verify... e.g., 'Claude released a new AI model in September 2026'"></textarea>
+        </div>
+        <button type="submit" class="btn">Verify Claim</button>
+    </form>
+</div>
+
+<div class="card">
+    <h3 style="margin-bottom: 0.75rem; color: #f0f6fc;">How it works</h3>
+    <p style="color: #8b949e; line-height: 1.7;">
+        1. <strong style="color: #58a6ff;">Query Generator</strong> — Breaks your claim into search queries<br>
+        2. <strong style="color: #58a6ff;">Evidence Collector</strong> — Searches the web via Tavily<br>
+        3. <strong style="color: #58a6ff;">Synthesizer</strong> — Analyzes evidence and reaches a verdict<br>
+        4. <strong style="color: #58a6ff;">Database</strong> — Saves everything for your review
+    </p>
+</div>
+{% endblock %}

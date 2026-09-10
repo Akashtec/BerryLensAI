@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block title %}BerryLens AI | Fact Check{% endblock %}
+{% block content %}
+<section style="max-width:760px;margin:2rem auto 2.5rem;text-align:center"><div class="muted mono">LIVE EVIDENCE / SEMANTIC MEMORY / MULTI-AGENT ANALYSIS</div><h1>See the signal.<br><span class="accent">Question the noise.</span></h1><p class="muted">Submit a claim and BerryLens will search, cross-reference, and explain the evidence behind its verdict.</p></section>
+<section class="card" style="max-width:760px;margin:auto"><form id="check-form"><textarea id="claim" rows="3" placeholder="Enter a claim to verify..."></textarea><div style="display:flex;justify-content:flex-end;margin-top:1rem"><button type="submit">Analyze claim</button></div></form><div id="state" class="muted" style="display:none;margin-top:1.5rem">Dispatching agents and searching live sources...</div><div id="result" style="display:none;margin-top:1.5rem"></div></section>
+<section class="grid" style="max-width:760px;margin:1.25rem auto"><div class="card stat"><small>Claims checked</small><strong id="total">{{ stats.total_claims }}</strong></div><div class="card stat"><small>Average confidence</small><strong id="average">{{ stats.avg_confidence }}%</strong></div><div class="card stat"><small>RAG memory</small><strong id="rag">-</strong></div></section>
+{% endblock %}
+{% block scripts %}<script>
+const form=document.getElementById('check-form'), state=document.getElementById('state'), result=document.getElementById('result');
+async function refresh(){const r=await fetch('/api/stats');const s=await r.json();document.getElementById('total').textContent=s.total;document.getElementById('average').textContent=s.avg_confidence+'%';document.getElementById('rag').textContent=s.rag_count;}
+function showResult(data){
+	result.replaceChildren();
+	const verdict=document.createElement('div');
+	verdict.className='mono';
+	verdict.style.fontSize='1.4rem';
+	verdict.style.fontWeight='700';
+	verdict.style.color=data.verdict==='TRUE'?'var(--green)':data.verdict==='FALSE'?'var(--red)':'var(--amber)';
+	verdict.textContent=data.verdict||'UNCERTAIN';
+	const summary=document.createElement('p');
+	summary.textContent=data.summary||'No explanation was returned.';
+	const confidence=document.createElement('div');
+	confidence.className='muted mono';
+	confidence.textContent='Confidence: '+Math.round((data.confidence||0)*100)+'%'+(data.from_cache?' · retrieved from RAG memory':'');
+	result.append(verdict,summary,confidence);
+}
+form.addEventListener('submit',async e=>{e.preventDefault();const claim=document.getElementById('claim').value.trim();if(!claim)return;state.style.display='block';result.style.display='none';try{const response=await fetch('/api/v1/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({claim})});const data=await response.json();if(!response.ok)throw new Error(data.detail||data.error||'Request failed');showResult(data);result.style.display='block';refresh()}catch(err){result.replaceChildren();const message=document.createElement('p');message.style.color='var(--red)';message.textContent=err.message;result.append(message);result.style.display='block'}finally{state.style.display='none'}});refresh();
+async function verifyWithStream(claim){
+ const response=await fetch('/api/v1/verify/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({claim})});
+ if(!response.ok||!response.body)throw new Error('stream unavailable');
+ const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='',completed=null;
+ while(true){const chunk=await reader.read();if(chunk.done)break;buffer+=decoder.decode(chunk.value,{stream:true});const events=buffer.split('\n\n');buffer=events.pop();for(const raw of events){const stage=(raw.match(/^event: (.+)$/m)||[])[1];const dataLine=(raw.match(/^data: (.+)$/m)||[])[1];if(!stage||!dataLine)continue;const data=JSON.parse(dataLine);if(stage==='completed')completed=data;else state.textContent=stage.replaceAll('_',' ')+'...';}}
+ if(!completed)throw new Error('stream ended without a result');return completed;
+}
+async function verifyWithFallback(claim){const response=await fetch('/api/v1/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({claim})});const data=await response.json();if(!response.ok)throw new Error(data.detail||data.error||'Request failed');return data;}
+form.addEventListener('submit',async e=>{e.preventDefault();const claim=document.getElementById('claim').value.trim();if(!claim)return;state.style.display='block';result.style.display='none';try{let data;try{data=await verifyWithStream(claim)}catch(streamError){state.textContent='Verifying claim...';data=await verifyWithFallback(claim)}showResult(data);result.style.display='block';refresh()}catch(err){result.replaceChildren();const message=document.createElement('p');message.style.color='var(--red)';message.textContent=err.message;result.append(message);result.style.display='block'}finally{state.style.display='none'}});refresh();
+</script>{% endblock %}

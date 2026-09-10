@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block title %}BerryLens AI | Dashboard{% endblock %}
+{% block content %}<div style="display:flex;justify-content:space-between;align-items:end;gap:1rem;margin-bottom:1.5rem"><div><div class="muted mono">SYSTEM OVERVIEW</div><h2>Analytics dashboard</h2></div><button onclick="load()">Refresh</button></div><div class="grid" id="stats"></div><section class="card" style="margin-top:1.25rem"><h3>Recent fact-checks</h3><div style="overflow:auto"><table><thead><tr><th>Claim</th><th>Verdict</th><th>Confidence</th><th>Date</th></tr></thead><tbody id="rows"><tr><td colspan="4" class="muted">Loading...</td></tr></tbody></table></div></section>{% endblock %}
+{% block scripts %}<script>
+async function load(){
+	const [s,h]=await Promise.all([fetch('/api/v1/stats').then(r=>r.json()),fetch('/api/v1/history?limit=20').then(r=>r.json())]);
+	const stats=document.getElementById('stats');
+	stats.replaceChildren();
+	[['Total reports',s.total],['Average confidence',Math.round((s.average_confidence||0)*100)+'%']].forEach(x=>{const card=document.createElement('div');card.className='card stat';const label=document.createElement('small');label.textContent=x[0];const value=document.createElement('strong');value.textContent=x[1];card.append(label,value);stats.append(card)});
+	const rows=document.getElementById('rows');rows.replaceChildren();
+	if(!h.reports.length){const row=document.createElement('tr');const cell=document.createElement('td');cell.colSpan=4;cell.className='muted';cell.textContent='No reports yet.';row.append(cell);rows.append(row);return}
+	h.reports.forEach(report=>{const row=document.createElement('tr');[report.claim,report.verdict,Math.round((report.confidence||0)*100)+'%',(report.timestamp||'').slice(0,10)].forEach((value,index)=>{const cell=document.createElement('td');cell.textContent=value||'-';if(index===1)cell.className='tag';if(index===2)cell.className='mono';if(index===3)cell.className='muted';row.append(cell)});rows.append(row)});
+}load();
+</script>{% endblock %}
