@@ -33,26 +33,35 @@ class VerificationService:
         request = VerifyRequest(claim=raw_claim)
         started = perf_counter()
 
-        if self.memory:
-            cached = self.memory.search(request.claim, threshold=0.85)
-            if cached:
-                self._emit(progress, "cached", {})
-                return self._cached_report(cached[0], request.claim, started)
-
         try:
             queries = extract_search_queries(request.claim)
-            self._emit(progress, "queries_generated", {"count": len(queries)})
-            evidence = fetch_evidence(queries)
-            self._emit(progress, "evidence_retrieved", {"count": len(evidence)})
-            synthesis = analyze_evidence(request.claim, evidence)
-            assessments = assess_evidence_stance(request.claim, evidence)
-            self._emit(progress, "evidence_assessed", {"count": len(assessments)})
         except Exception:
-            logger.exception("Verification stage failed", extra={"stage": "research_or_assessment"})
-            return self._failure_report(request.claim, started)
+            logger.exception("Query generation stage failed")
+            queries = [request.claim]
+        self._emit(progress, "queries_generated", {"count": len(queries)})
+
+        try:
+            evidence = fetch_evidence(queries)
+        except Exception:
+            logger.exception("Evidence retrieval stage failed")
+            evidence = []
+        self._emit(progress, "evidence_retrieved", {"count": len(evidence)})
+
+        try:
+            assessments = assess_evidence_stance(request.claim, evidence)
+        except Exception:
+            logger.exception("Evidence assessment stage failed")
+            assessments = []
+        self._emit(progress, "evidence_assessed", {"count": len(assessments)})
+
+        try:
+            synthesis = analyze_evidence(request.claim, evidence)
+        except Exception:
+            logger.exception("Evidence synthesis stage failed")
+            synthesis = self._safe_synthesis(evidence)
 
         verdict, confidence = self.verdict_engine.compute(assessments)
-        if not assessments:
+        if not evidence:
             status = ResearchStatus.FAILED
             verdict = Verdict.UNCERTAIN
         elif verdict in (Verdict.UNCERTAIN, Verdict.MIXED):
@@ -85,20 +94,23 @@ class VerificationService:
         if self.persist:
             try:
                 self.persist(report, user_id)
-            except TypeError:
-                self.persist(report)
+            except Exception:
+                logger.exception("Report persistence failed")
         elif self.memory and status in (ResearchStatus.COMPLETE, ResearchStatus.PARTIAL):
-            self.memory.store(request.claim, {
-                "verdict": report.verdict.value,
-                "confidence": report.confidence_pct,
-                "summary": report.summary,
-                "research_status": report.research_status.value,
-                "schema_version": report.schema_version,
-                "sources": [
-                    {"title": item.source.title, "url": str(item.source.url)}
-                    for item in report.all_evidence[:3]
-                ],
-            })
+            try:
+                self.memory.store(request.claim, {
+                    "verdict": report.verdict.value,
+                    "confidence": report.confidence_pct,
+                    "summary": report.summary,
+                    "research_status": report.research_status.value,
+                    "schema_version": report.schema_version,
+                    "sources": [
+                        {"title": item.source.title, "url": str(item.source.url)}
+                        for item in report.all_evidence[:3]
+                    ],
+                })
+            except Exception:
+                logger.exception("Historical memory write failed; returning report")
         return report
 
     @staticmethod
@@ -117,6 +129,19 @@ class VerificationService:
             uncertainties=["External research or evidence assessment was unavailable."],
             research_status=ResearchStatus.FAILED,
             processing_time_ms=round((perf_counter() - started) * 1000),
+        )
+
+    @staticmethod
+    def _safe_synthesis(evidence) -> object:
+        from models.evidence import VerificationResult
+
+        return VerificationResult(
+            verdict="INSUFFICIENT EVIDENCE",
+            confidence=0,
+            explanation=(
+                "Evidence was retrieved, but the language-model synthesis stage "
+                f"was unavailable. Retrieved {len(evidence)} source(s)."
+            ),
         )
 
     @staticmethod

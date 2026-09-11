@@ -36,10 +36,10 @@ def test_consistent_supporting_sources_are_true():
     assert confidence > 0.7
 
 
-def test_balanced_sources_are_uncertain():
+def test_balanced_sources_are_mixed():
     verdict, _ = VerdictEngine().compute([
         make_assessment(Stance.SUPPORTS, 0.8),
         make_assessment(Stance.REFUTES, 0.8),
     ])
 
-    assert verdict is Verdict.UNCERTAIN
+    assert verdict is Verdict.MIXED

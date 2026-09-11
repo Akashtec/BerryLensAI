@@ -25,16 +25,28 @@ def test_cached_unknown_result_abstains():
     assert report.confidence == 0.0
 
 
-def test_pipeline_failure_returns_error_report(monkeypatch):
+def test_query_provider_failure_returns_safe_uncertain_report(monkeypatch):
     import verification_service as service_module
+    from models.evidence import VerificationResult
 
     def fail(_claim):
         raise TimeoutError("provider timeout")
 
     monkeypatch.setattr(service_module, "extract_search_queries", fail)
+    monkeypatch.setattr(service_module, "fetch_evidence", lambda queries: [])
+    monkeypatch.setattr(service_module, "assess_evidence_stance", lambda claim, evidence: [])
+    monkeypatch.setattr(
+        service_module,
+        "analyze_evidence",
+        lambda claim, evidence: VerificationResult(
+            verdict="INSUFFICIENT EVIDENCE",
+            confidence=0,
+            explanation="No evidence available.",
+        ),
+    )
     report = VerificationService().verify("A sufficiently long claim.")
 
-    assert report.verdict is Verdict.ERROR
+    assert report.verdict is Verdict.UNCERTAIN
     assert report.research_status is ResearchStatus.FAILED
     assert "provider timeout" not in report.summary
 
@@ -54,3 +66,81 @@ def test_claim_generation_falls_back_when_mistral_is_unavailable(monkeypatch):
         "Is Sweetie Fox married? official source",
         "Is Sweetie Fox married? fact check",
     ]
+
+
+def test_synthesis_provider_failure_returns_safe_uncertain_result(monkeypatch):
+    import agents.analyst_agent as analyst_agent
+
+    def fail(_prompt):
+        raise RuntimeError("Mistral structured generation failed after retries")
+
+    monkeypatch.setattr(analyst_agent, "_generate_json", fail)
+    result = analyst_agent.analyze_evidence("A sufficiently long claim.", [])
+
+    assert result.verdict == "INSUFFICIENT EVIDENCE"
+    assert result.confidence == 0
+
+
+def test_service_connects_all_pipeline_stages_and_persists(monkeypatch):
+    import verification_service as service_module
+    from models.evidence import VerificationResult
+
+    calls = []
+
+    monkeypatch.setattr(service_module, "extract_search_queries", lambda claim: ["query"])
+    monkeypatch.setattr(service_module, "fetch_evidence", lambda queries: [])
+    monkeypatch.setattr(service_module, "assess_evidence_stance", lambda claim, evidence: [])
+    monkeypatch.setattr(
+        service_module,
+        "analyze_evidence",
+        lambda claim, evidence: VerificationResult(
+            verdict="INSUFFICIENT EVIDENCE",
+            confidence=0,
+            explanation="No evidence available.",
+        ),
+    )
+
+    def persist(report, user_id):
+        calls.append((report.claim, user_id, report.verdict))
+
+    report = VerificationService(persist=persist).verify(
+        "A sufficiently long claim.", user_id=7
+    )
+
+    assert report.verdict is Verdict.UNCERTAIN
+    assert calls == [("A sufficiently long claim.", 7, Verdict.UNCERTAIN)]
+
+
+def test_fresh_verification_does_not_return_historical_match(monkeypatch):
+    import verification_service as service_module
+
+    class HistoricalMemory:
+        def search(self, *args, **kwargs):
+            return [{'verdict': 'SUPPORTED', 'confidence': 99, 'summary': 'Old result'}]
+
+    monkeypatch.setattr(service_module, "extract_search_queries", lambda claim: [claim])
+    monkeypatch.setattr(service_module, "fetch_evidence", lambda queries: [])
+
+    report = VerificationService(memory=HistoricalMemory()).verify(
+        "A sufficiently long claim."
+    )
+
+    assert report.from_cache is False
+    assert report.verdict is Verdict.UNCERTAIN
+
+
+def test_persistence_failure_does_not_hide_report(monkeypatch):
+    import verification_service as service_module
+
+    monkeypatch.setattr(service_module, "extract_search_queries", lambda claim: [claim])
+    monkeypatch.setattr(service_module, "fetch_evidence", lambda queries: [])
+
+    def fail_persist(report, user_id):
+        raise OSError("database unavailable")
+
+    report = VerificationService(persist=fail_persist).verify(
+        "A sufficiently long claim."
+    )
+
+    assert report.verdict is Verdict.UNCERTAIN
+    assert report.research_status is ResearchStatus.FAILED

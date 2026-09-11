@@ -12,7 +12,7 @@ class VerdictEngine:
             if item.stance in (Stance.SUPPORTS, Stance.REFUTES)
         ]
         if len(usable) < 2:
-            return (Verdict.MIXED if len(usable) >= 4 else Verdict.UNCERTAIN), self._confidence(usable, 0.6)
+            return Verdict.UNCERTAIN, self._confidence(usable, 0.6)
 
         support_score = sum(
             item.quality_score for item in usable if item.stance == Stance.SUPPORTS
@@ -29,6 +29,8 @@ class VerdictEngine:
         gap = abs(support_norm - refute_norm)
         confidence = self._confidence(usable, 1.15 if gap >= 0.15 else 0.85)
 
+        if support_score and refute_score and gap < 0.35:
+            return Verdict.MIXED, confidence
         if gap < 0.15:
             return Verdict.UNCERTAIN, confidence
         return (

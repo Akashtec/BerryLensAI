@@ -2,11 +2,11 @@
 {% block title %}BerryLens AI | Fact Check{% endblock %}
 {% block content %}
 <section style="max-width:760px;margin:2rem auto 2.5rem;text-align:center"><div class="muted mono">LIVE EVIDENCE / SEMANTIC MEMORY / MULTI-AGENT ANALYSIS</div><h1>See the signal.<br><span class="accent">Question the noise.</span></h1><p class="muted">Submit a claim and BerryLens will search, cross-reference, and explain the evidence behind its verdict.</p></section>
-<section class="card" style="max-width:760px;margin:auto"><form id="check-form"><textarea id="claim" rows="3" placeholder="Enter a claim to verify..."></textarea><div style="display:flex;justify-content:flex-end;margin-top:1rem"><button type="submit">Analyze claim</button></div></form><div id="state" class="muted" style="display:none;margin-top:1.5rem">Dispatching agents and searching live sources...</div><div id="result" style="display:none;margin-top:1.5rem"></div></section>
+<section class="card" style="max-width:760px;margin:auto"><form id="check-form"><textarea id="claim" rows="3" placeholder="Enter a claim or news statement..."></textarea><div style="display:flex;justify-content:flex-end;margin-top:1rem"><button id="submit-button" type="submit">Check claim</button></div></form><div id="state" class="muted" style="display:none;margin-top:1.5rem">Analyzing claim...</div><div id="result" style="display:none;margin-top:1.5rem"></div></section>
 <section class="grid" style="max-width:760px;margin:1.25rem auto"><div class="card stat"><small>Claims checked</small><strong id="total">{{ stats.total_claims }}</strong></div><div class="card stat"><small>Average confidence</small><strong id="average">{{ stats.avg_confidence }}%</strong></div><div class="card stat"><small>RAG memory</small><strong id="rag">-</strong></div></section>
 {% endblock %}
 {% block scripts %}<script>
-const form=document.getElementById('check-form'), state=document.getElementById('state'), result=document.getElementById('result');
+const form=document.getElementById('check-form'), state=document.getElementById('state'), result=document.getElementById('result'), submitButton=document.getElementById('submit-button');
 async function refresh(){const r=await fetch('/api/stats');const s=await r.json();document.getElementById('total').textContent=s.total;document.getElementById('average').textContent=s.avg_confidence+'%';document.getElementById('rag').textContent=s.rag_count;}
 function showResult(data){
 	result.replaceChildren();
@@ -14,16 +14,18 @@ function showResult(data){
 	verdict.className='mono';
 	verdict.style.fontSize='1.4rem';
 	verdict.style.fontWeight='700';
-	verdict.style.color=data.verdict==='TRUE'?'var(--green)':data.verdict==='FALSE'?'var(--red)':'var(--amber)';
-	verdict.textContent=data.verdict||'UNCERTAIN';
+	verdict.style.color=['TRUE','SUPPORTED'].includes(data.verdict)?'var(--green)':['FALSE','REFUTED'].includes(data.verdict)?'var(--red)':'var(--amber)';
+	verdict.textContent=data.verdict==='TRUE'?'REAL':data.verdict==='FALSE'?'FAKE':data.verdict||'UNCERTAIN';
 	const summary=document.createElement('p');
 	summary.textContent=data.summary||'No explanation was returned.';
 	const confidence=document.createElement('div');
 	confidence.className='muted mono';
-	confidence.textContent='Confidence: '+Math.round((data.confidence||0)*100)+'%'+(data.from_cache?' · retrieved from RAG memory':'');
-	result.append(verdict,summary,confidence);
+	confidence.textContent='Confidence: '+Math.round((data.confidence||0)*100)+'%'+(data.processing_time_ms?' · '+(data.processing_time_ms/1000).toFixed(1)+'s':'');
+	const counts=document.createElement('p'); counts.className='muted'; counts.textContent='Supporting: '+(data.supporting_evidence||[]).length+' · Refuting: '+(data.refuting_evidence||[]).length+' · Unclear: '+(data.neutral_evidence||[]).length;
+	result.append(verdict,summary,confidence,counts);
+	const sources=[...(data.supporting_evidence||[]),...(data.refuting_evidence||[]),...(data.neutral_evidence||[])];
+	if(sources.length){const heading=document.createElement('h3'); heading.textContent='Sources'; result.append(heading); sources.forEach(item=>{const card=document.createElement('div'); card.className='card'; const link=document.createElement('a'); link.className='cyan'; link.href=item.source.url; link.target='_blank'; link.rel='noopener'; link.textContent=item.source.title||item.source.domain; const score=item.quality_score||0; const quality=score>=.7?'HIGH':score>=.4?'MEDIUM':'LOW'; const meta=document.createElement('div'); meta.className='muted mono'; meta.textContent=(item.source.domain||'SOURCE')+' · '+item.stance+' · QUALITY '+quality; const detail=document.createElement('p'); detail.className='muted'; detail.textContent=item.explanation||'No detailed source assessment available.'; card.append(link,meta,detail); result.append(card);});}
 }
-form.addEventListener('submit',async e=>{e.preventDefault();const claim=document.getElementById('claim').value.trim();if(!claim)return;state.style.display='block';result.style.display='none';try{const response=await fetch('/api/v1/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({claim})});const data=await response.json();if(!response.ok)throw new Error(data.detail||data.error||'Request failed');showResult(data);result.style.display='block';refresh()}catch(err){result.replaceChildren();const message=document.createElement('p');message.style.color='var(--red)';message.textContent=err.message;result.append(message);result.style.display='block'}finally{state.style.display='none'}});refresh();
 async function verifyWithStream(claim){
  const response=await fetch('/api/v1/verify/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({claim})});
  if(!response.ok||!response.body)throw new Error('stream unavailable');
@@ -32,5 +34,5 @@ async function verifyWithStream(claim){
  if(!completed)throw new Error('stream ended without a result');return completed;
 }
 async function verifyWithFallback(claim){const response=await fetch('/api/v1/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({claim})});const data=await response.json();if(!response.ok)throw new Error(data.detail||data.error||'Request failed');return data;}
-form.addEventListener('submit',async e=>{e.preventDefault();const claim=document.getElementById('claim').value.trim();if(!claim)return;state.style.display='block';result.style.display='none';try{let data;try{data=await verifyWithStream(claim)}catch(streamError){state.textContent='Verifying claim...';data=await verifyWithFallback(claim)}showResult(data);result.style.display='block';refresh()}catch(err){result.replaceChildren();const message=document.createElement('p');message.style.color='var(--red)';message.textContent=err.message;result.append(message);result.style.display='block'}finally{state.style.display='none'}});refresh();
+form.addEventListener('submit',async e=>{e.preventDefault();if(submitButton.disabled)return;const claim=document.getElementById('claim').value.trim();if(!claim)return;submitButton.disabled=true;submitButton.textContent='Analyzing...';state.style.display='block';result.style.display='none';try{const data=await verifyWithStream(claim);showResult(data);result.style.display='block';refresh()}catch(err){result.replaceChildren();const message=document.createElement('p');message.style.color='var(--red)';message.textContent=err.message;result.append(message);result.style.display='block'}finally{state.style.display='none';submitButton.disabled=false;submitButton.textContent='Check claim'}});refresh();
 </script>{% endblock %}

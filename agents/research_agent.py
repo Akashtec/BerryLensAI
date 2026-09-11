@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 from pathlib import Path
@@ -13,11 +14,12 @@ from models.evidence import Evidence
 
 load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / '.env')
 
+logger = logging.getLogger(__name__)
 api_key = os.getenv("TAVILY_API_KEY")
-if not api_key:
-    raise ValueError("TAVILY_API_KEY missing from .env file.")
+client = TavilyClient(api_key=api_key) if api_key else None
 
-client = TavilyClient(api_key=api_key)
+if client is None:
+    logger.warning("TAVILY_API_KEY not found; evidence retrieval will return no results")
 
 
 def fetch_evidence(queries: list[str]) -> list[Evidence]:
@@ -26,14 +28,20 @@ def fetch_evidence(queries: list[str]) -> list[Evidence]:
     structured evidence objects.
     """
 
+    if not client:
+        return []
+
     evidence_items = []
 
     for query in queries[:settings.max_queries_per_claim]:
+        if not query.strip():
+            continue
         try:
             response = client.search(
                 query=query,
-                search_depth="advanced",
+                search_depth="basic",
                 max_results=settings.max_results_per_query,
+                timeout=8,
             )
 
             for result in response.get("results", []):
@@ -58,8 +66,8 @@ def fetch_evidence(queries: list[str]) -> list[Evidence]:
                     )
                 )
 
-        except Exception as e:
-            print(f"Search failed for query '{query}': {str(e)}")
+        except Exception:
+            logger.exception("Search failed for query %r", query)
 
     unique = deduplicate_evidence([
         item.model_dump() for item in evidence_items

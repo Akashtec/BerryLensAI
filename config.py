@@ -32,6 +32,9 @@ class Settings:
     """Runtime settings with conservative local-development defaults."""
 
     huggingface_api_key = os.getenv("HUGGINGFACE_API_KEY")
+    huggingface_model = os.getenv(
+        "HUGGINGFACE_MODEL", "mistralai/Mistral-7B-Instruct-v0.3"
+    )
     tavily_api_key = os.getenv("TAVILY_API_KEY")
     flask_secret_key = os.getenv("FLASK_SECRET_KEY")
     api_key = os.getenv("BERRYLENS_API_KEY")

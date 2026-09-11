@@ -62,7 +62,15 @@ class LazyMemory:
         return self.instance.store(*args, **kwargs)
 
     def count(self):
-        return self.instance.count()
+        if self._instance is not None:
+            return self._instance.count()
+        try:
+            import chromadb
+
+            client = chromadb.PersistentClient(path=self.path)
+            return client.get_collection(name='fact_checks').count()
+        except Exception:
+            return 0
 
 
 @app.before_request
@@ -165,7 +173,11 @@ verification_service = VerificationService(memory=memory, persist=persist_report
 
 @app.route('/')
 def home():
-    stats = get_stats()
+    report_stats = report_db.stats(user_id=session.get('user_id'))
+    stats = {
+        'total_claims': report_stats['total'],
+        'avg_confidence': round(float(report_stats['average_confidence']) * 100),
+    }
     return render_template('index.html', stats=stats)
 
 
@@ -296,7 +308,14 @@ def verify_stream():
 
 @app.route('/health')
 def health():
-    return jsonify({'status': 'ok', 'service': 'berrylens-ai', 'database': 'configured'})
+    return jsonify({
+        'status': 'ok',
+        'service': 'berrylens-ai',
+        'database': 'available',
+        'huggingface': 'configured' if settings.huggingface_api_key else 'not_configured',
+        'tavily': 'configured' if settings.tavily_api_key else 'not_configured',
+        'chroma': 'optional_lazy',
+    })
 
 
 @app.route('/metrics')
@@ -333,13 +352,12 @@ def api_docs():
 
 
 @app.route('/claim/<int:claim_id>')
-@login_required
 def result(claim_id):
-    claim = get_claim_by_id(claim_id)
-    if not claim:
+    report = report_db.get_by_id(claim_id, user_id=session.get('user_id'))
+    if not report:
         flash('Claim not found.', 'error')
         return redirect(url_for('home'))
-    return render_template('result.html', claim=claim)
+    return render_template('result.html', report=report)
 
 
 @app.route('/api/v1/result/<int:report_id>')
@@ -370,59 +388,73 @@ def api_v1_stats():
 
 
 @app.route('/history')
-@login_required
 def history():
     claims = [
         {
+            'id': report.id,
             'text': report.claim,
             'verdict': report.verdict.value,
             'confidence': report.confidence_pct,
             'status': report.research_status.value,
             'created_at': report.timestamp.isoformat(),
         }
-        for report in report_db.list_reports(user_id=session['user_id'])
+        for report in report_db.list_reports(user_id=session.get('user_id'))
     ]
     return render_template('history.html', claims=claims)
 
 
 @app.route('/dashboard')
-@login_required
 def dashboard():
-    stats = report_db.stats(user_id=session['user_id'])
-    claims = []
+    stats = report_db.stats(user_id=session.get('user_id'))
+    claims = [
+        {
+            'id': report.id,
+            'text': report.claim,
+            'verdict': report.verdict.value,
+            'confidence': report.confidence_pct,
+            'status': report.research_status.value,
+            'created_at': report.timestamp.isoformat(),
+        }
+        for report in report_db.list_reports(limit=20, user_id=session.get('user_id'))
+    ]
     return render_template('dashboard.html', stats=stats, claims=claims)
 
 
 @app.route('/api/stats')
 def api_stats():
-    claims = get_all_claims()
+    reports = report_db.list_reports(user_id=session.get('user_id'))
     verdict_counts = defaultdict(int)
     confidence_buckets = defaultdict(int)
     timeline = defaultdict(int)
     total_confidence = 0
 
-    for claim in claims:
-        verdict = (claim.get('verdict') or 'unknown').lower()
+    for report in reports:
+        verdict = report.verdict.value.lower()
         verdict_counts[verdict] += 1
-        confidence = int(claim.get('confidence') or 0)
+        confidence = report.confidence_pct
         total_confidence += confidence
         confidence_buckets[min(confidence // 20, 4)] += 1
-        timestamp = claim.get('created_at') or 'unknown'
+        timestamp = report.timestamp.isoformat()
         timeline[str(timestamp)[:10]] += 1
 
-    total = len(claims)
+    total = len(reports)
+    try:
+        rag_count = memory.count()
+    except Exception:
+        app.logger.exception('RAG memory count unavailable')
+        rag_count = 0
     return jsonify({
         'total': total,
-        'true_count': verdict_counts.get('supported', 0) + verdict_counts.get('true', 0),
-        'false_count': verdict_counts.get('refuted', 0) + verdict_counts.get('false', 0),
-        'mixed_count': verdict_counts.get('misleading', 0) + verdict_counts.get('mixed', 0),
-        'unknown_count': verdict_counts.get('insufficient evidence', 0) + verdict_counts.get('unknown', 0),
+        'true_count': verdict_counts.get('true', 0),
+        'false_count': verdict_counts.get('false', 0),
+        'mixed_count': verdict_counts.get('mixed', 0),
+        'unknown_count': verdict_counts.get('uncertain', 0) + verdict_counts.get('error', 0),
         'avg_confidence': round(total_confidence / total) if total else 0,
         'true_rate': round((verdict_counts.get('supported', 0) / total) * 100) if total else 0,
         'verdict_counts': dict(verdict_counts),
         'confidence_buckets': dict(confidence_buckets),
         'timeline': dict(sorted(timeline.items())),
-        'rag_count': memory.count(),
+        'rag_count': rag_count,
     })
 
 
@@ -432,7 +464,17 @@ def api_history():
         limit = max(1, min(int(request.args.get('limit', 20)), 100))
     except ValueError:
         limit = 20
-    return jsonify({'claims': get_all_claims()[:limit]})
+    reports = report_db.list_reports(limit=limit, user_id=session.get('user_id'))
+    return jsonify({'claims': [
+        {
+            'text': report.claim,
+            'verdict': report.verdict.value,
+            'confidence': report.confidence_pct,
+            'status': report.research_status.value,
+            'created_at': report.timestamp.isoformat(),
+        }
+        for report in reports
+    ]})
 
 
 if __name__ == '__main__':

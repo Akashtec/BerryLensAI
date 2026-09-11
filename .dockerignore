@@ -11,3 +11,5 @@ docs/
 requirements-dev.txt
 *.md
 *.zip
+data/
+berrylens.db
