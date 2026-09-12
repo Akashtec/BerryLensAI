@@ -8,7 +8,7 @@ def test_versioned_verify_validates_and_returns_canonical_report(monkeypatch):
         def verify(self, claim):
             return VerificationReport(
                 claim=claim,
-                verdict=Verdict.UNCERTAIN,
+                verdict=Verdict.INSUFFICIENT_EVIDENCE,
                 confidence=0.0,
                 summary="No usable evidence.",
                 research_status=ResearchStatus.FAILED,
@@ -22,8 +22,30 @@ def test_versioned_verify_validates_and_returns_canonical_report(monkeypatch):
 
     valid = client.post("/api/v1/verify", json={"claim": "A sufficiently long claim."})
     assert valid.status_code == 200
-    assert valid.get_json()["verdict"] == "UNCERTAIN"
+    assert valid.get_json()["verdict"] == "INSUFFICIENT_EVIDENCE"
     assert valid.get_json()["research_status"] == "FAILED"
+
+
+def test_mission_verify_alias_returns_canonical_report(monkeypatch):
+    import app as app_module
+
+    class FakeService:
+        def verify(self, claim):
+            return VerificationReport(
+                claim=claim,
+                verdict=Verdict.SUPPORTED,
+                confidence=0.8,
+                summary="Evidence supports the claim.",
+                research_status=ResearchStatus.COMPLETE,
+            )
+
+    monkeypatch.setattr(app_module, "verification_service", FakeService())
+    response = app_module.app.test_client().post(
+        "/api/verify", json={"claim": "A sufficiently long claim."}
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["verdict"] == "SUPPORTED"
 
 
 def test_stream_endpoint_emits_real_pipeline_events(monkeypatch):
@@ -36,7 +58,7 @@ def test_stream_endpoint_emits_real_pipeline_events(monkeypatch):
                 progress("evidence_retrieved", {"count": 1})
             return VerificationReport(
                 claim=claim,
-                verdict=Verdict.UNCERTAIN,
+                verdict=Verdict.INSUFFICIENT_EVIDENCE,
                 confidence=0.0,
                 summary="No usable evidence.",
                 research_status=ResearchStatus.FAILED,

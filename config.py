@@ -36,6 +36,27 @@ class Settings:
         "HUGGINGFACE_MODEL", "mistralai/Mistral-7B-Instruct-v0.3"
     )
     tavily_api_key = os.getenv("TAVILY_API_KEY")
+    gemini_api_key = os.getenv("GEMINI_API_KEY")
+    groq_api_key = os.getenv("GROQ_API_KEY")
+    deepseek_api_key = os.getenv("DEEPSEEK_API_KEY")
+    cerebras_api_key = os.getenv("CEREBRAS_API_KEY")
+    primary_llm_provider = os.getenv("PRIMARY_LLM_PROVIDER", "gemini").strip().lower()
+    fallback_llm_providers = [
+        provider.strip().lower()
+        for provider in os.getenv("FALLBACK_LLM_PROVIDERS", "").split(",")
+        if provider.strip()
+    ]
+    gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    gemini_fallback_models = [
+        model.strip()
+        for model in os.getenv("GEMINI_FALLBACK_MODELS", "gemini-2.0-flash,gemini-1.5-flash").split(",")
+        if model.strip()
+    ]
+    groq_model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+    deepseek_model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+    cerebras_model = os.getenv("CEREBRAS_MODEL", "llama3.1-8b")
+    llm_timeout_seconds = float(os.getenv("LLM_TIMEOUT_SECONDS", os.getenv("GEMINI_TIMEOUT_SECONDS", "8")))
+    disable_llm = os.getenv("BERRYLENS_DISABLE_LLM", "false").lower() == "true"
     flask_secret_key = os.getenv("FLASK_SECRET_KEY")
     api_key = os.getenv("BERRYLENS_API_KEY")
     rate_limit_per_minute = _int_setting("RATE_LIMIT_PER_MINUTE", 5)

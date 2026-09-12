@@ -22,7 +22,7 @@ def test_single_source_abstains():
         make_assessment(Stance.SUPPORTS, 0.9),
     ])
 
-    assert verdict is Verdict.UNCERTAIN
+    assert verdict is Verdict.INSUFFICIENT_EVIDENCE
     assert confidence < 0.7
 
 
@@ -32,7 +32,7 @@ def test_consistent_supporting_sources_are_true():
         make_assessment(Stance.SUPPORTS, 0.8),
     ])
 
-    assert verdict is Verdict.TRUE
+    assert verdict is Verdict.SUPPORTED
     assert confidence > 0.7
 
 
@@ -42,4 +42,4 @@ def test_balanced_sources_are_mixed():
         make_assessment(Stance.REFUTES, 0.8),
     ])
 
-    assert verdict is Verdict.MIXED
+    assert verdict is Verdict.PARTIALLY_SUPPORTED

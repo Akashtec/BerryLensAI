@@ -7,11 +7,10 @@ from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 
 class Verdict(str, Enum):
-    TRUE = "TRUE"
-    FALSE = "FALSE"
-    MIXED = "MIXED"
-    UNCERTAIN = "UNCERTAIN"
-    ERROR = "ERROR"
+    SUPPORTED = "SUPPORTED"
+    REFUTED = "REFUTED"
+    PARTIALLY_SUPPORTED = "PARTIALLY_SUPPORTED"
+    INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"
 
 
 class Stance(str, Enum):
@@ -40,8 +39,16 @@ class ClaimAnalysis(BaseModel):
     normalized: str = Field(min_length=1)
     claim_type: ClaimType = ClaimType.FACTUAL
     entities: list[str] = Field(default_factory=list)
+    people: list[str] = Field(default_factory=list)
+    organizations: list[str] = Field(default_factory=list)
+    locations: list[str] = Field(default_factory=list)
+    dates: list[str] = Field(default_factory=list)
+    numbers: list[str] = Field(default_factory=list)
+    events: list[str] = Field(default_factory=list)
+    subclaims: list[str] = Field(default_factory=list)
     search_queries: list[str] = Field(default_factory=list)
     language: str = "en"
+    temporal_context: str | None = None
 
 
 class ResearchPlan(BaseModel):
@@ -104,9 +111,35 @@ class VerificationReport(BaseModel):
     sources_checked: int = 0
     processing_time_ms: int | None = None
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    synthesis_provider: str | None = None
+    provider_failures: list[str] = Field(default_factory=list)
     entities: list[str] = Field(default_factory=list)
+    claim_analysis: ClaimAnalysis | None = None
+    subclaims: list[str] = Field(default_factory=list)
     research_plan: ResearchPlan | None = None
-    schema_version: str = "1.1"
+    schema_version: str = "1.2"
+
+    @field_validator("verdict", mode="before")
+    @classmethod
+    def normalize_legacy_verdict(cls, value):
+        legacy_map = {
+            "TRUE": Verdict.SUPPORTED.value,
+            "SUPPORTED": Verdict.SUPPORTED.value,
+            "FALSE": Verdict.REFUTED.value,
+            "REFUTED": Verdict.REFUTED.value,
+            "MIXED": Verdict.PARTIALLY_SUPPORTED.value,
+            "MISLEADING": Verdict.PARTIALLY_SUPPORTED.value,
+            "PARTIALLY_SUPPORTED": Verdict.PARTIALLY_SUPPORTED.value,
+            "UNCERTAIN": Verdict.INSUFFICIENT_EVIDENCE.value,
+            "UNKNOWN": Verdict.INSUFFICIENT_EVIDENCE.value,
+            "ERROR": Verdict.INSUFFICIENT_EVIDENCE.value,
+            "INSUFFICIENT EVIDENCE": Verdict.INSUFFICIENT_EVIDENCE.value,
+            "INSUFFICIENT_EVIDENCE": Verdict.INSUFFICIENT_EVIDENCE.value,
+        }
+        if isinstance(value, Verdict):
+            return value
+        normalized = str(value).strip().upper().replace("-", "_")
+        return legacy_map.get(normalized, value)
 
     @property
     def confidence_pct(self) -> int:

@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block title %}BerryLens AI | Error {{ code }}{% endblock %}
+{% block content %}
+<section style="max-width:560px;margin:4rem auto;text-align:center">
+  <div class="mono accent" style="font-size:3.5rem;font-weight:700">{{ code }}</div>
+  <h2 style="margin:.5rem 0 1rem">{{ message }}</h2>
+  <p class="muted">If this keeps happening, please check the <a class="cyan" href="/health">/health</a> endpoint or try again in a moment.</p>
+  <div style="margin-top:1.5rem;display:flex;gap:1rem;justify-content:center;flex-wrap:wrap">
+    <a href="{{ url_for('home') }}" class="button">← Go home</a>
+    <a href="javascript:history.back()" class="button secondary">Back</a>
+  </div>
+</section>
+{% endblock %}

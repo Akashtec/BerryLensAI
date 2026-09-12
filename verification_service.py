@@ -63,8 +63,8 @@ class VerificationService:
         verdict, confidence = self.verdict_engine.compute(assessments)
         if not evidence:
             status = ResearchStatus.FAILED
-            verdict = Verdict.UNCERTAIN
-        elif verdict in (Verdict.UNCERTAIN, Verdict.MIXED):
+            verdict = Verdict.INSUFFICIENT_EVIDENCE
+        elif verdict in (Verdict.INSUFFICIENT_EVIDENCE, Verdict.PARTIALLY_SUPPORTED):
             status = ResearchStatus.PARTIAL
         else:
             status = ResearchStatus.COMPLETE
@@ -79,6 +79,8 @@ class VerificationService:
             confidence=confidence,
             summary=synthesis.explanation,
             reasoning="The summary was generated from retrieved evidence; the final verdict was computed from validated source assessments.",
+            synthesis_provider=getattr(synthesis, "provider_used", None),
+            provider_failures=getattr(synthesis, "provider_failures", []),
             supporting_evidence=[item for item in assessments if item.stance == Stance.SUPPORTS],
             refuting_evidence=[item for item in assessments if item.stance == Stance.REFUTES],
             neutral_evidence=[item for item in assessments if item.stance in (Stance.NEUTRAL, Stance.UNCLEAR)],
@@ -122,7 +124,7 @@ class VerificationService:
     def _failure_report(claim: str, started: float) -> VerificationReport:
         return VerificationReport(
             claim=claim,
-            verdict=Verdict.ERROR,
+            verdict=Verdict.INSUFFICIENT_EVIDENCE,
             confidence=0.0,
             summary="Verification could not be completed safely.",
             reasoning="A pipeline stage failed before a defensible evidence-based result was available.",
@@ -136,24 +138,33 @@ class VerificationService:
         from models.evidence import VerificationResult
 
         return VerificationResult(
-            verdict="INSUFFICIENT EVIDENCE",
+            verdict="INSUFFICIENT_EVIDENCE",
             confidence=0,
             explanation=(
                 "Evidence was retrieved, but the language-model synthesis stage "
                 f"was unavailable. Retrieved {len(evidence)} source(s)."
             ),
+            provider_used="deterministic",
         )
 
     @staticmethod
     def _cached_report(cached: dict, claim: str, started: float) -> VerificationReport:
         verdict_map = {
-            "SUPPORTED": Verdict.TRUE,
-            "TRUE": Verdict.TRUE,
-            "REFUTED": Verdict.FALSE,
-            "FALSE": Verdict.FALSE,
-            "MIXED": Verdict.MIXED,
+            "SUPPORTED": Verdict.SUPPORTED,
+            "TRUE": Verdict.SUPPORTED,
+            "REFUTED": Verdict.REFUTED,
+            "FALSE": Verdict.REFUTED,
+            "MIXED": Verdict.PARTIALLY_SUPPORTED,
+            "PARTIALLY_SUPPORTED": Verdict.PARTIALLY_SUPPORTED,
+            "INSUFFICIENT EVIDENCE": Verdict.INSUFFICIENT_EVIDENCE,
+            "INSUFFICIENT_EVIDENCE": Verdict.INSUFFICIENT_EVIDENCE,
+            "UNCERTAIN": Verdict.INSUFFICIENT_EVIDENCE,
+            "ERROR": Verdict.INSUFFICIENT_EVIDENCE,
         }
-        verdict = verdict_map.get(str(cached.get("verdict", "")).upper(), Verdict.UNCERTAIN)
+        verdict = verdict_map.get(
+            str(cached.get("verdict", "")).upper().replace("-", "_"),
+            Verdict.INSUFFICIENT_EVIDENCE,
+        )
         confidence = min(1.0, max(0.0, float(cached.get("confidence", 0)) / 100))
         return VerificationReport(
             claim=claim,

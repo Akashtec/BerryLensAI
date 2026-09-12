@@ -1,14 +1,78 @@
 {% extends 'base.html' %}
 {% block title %}BerryLens AI | Dashboard{% endblock %}
-{% block content %}<div style="display:flex;justify-content:space-between;align-items:end;gap:1rem;margin-bottom:1.5rem"><div><div class="muted mono">SYSTEM OVERVIEW</div><h2>Analytics dashboard</h2></div><button onclick="load()">Refresh</button></div><div class="grid" id="stats"></div><section class="card" style="margin-top:1.25rem"><h3>Recent fact-checks</h3><div style="overflow:auto"><table><thead><tr><th>Claim</th><th>Verdict</th><th>Confidence</th><th>Date</th></tr></thead><tbody id="rows"><tr><td colspan="4" class="muted">Loading...</td></tr></tbody></table></div></section>{% endblock %}
-{% block scripts %}<script>
-async function load(){
-	const [s,h]=await Promise.all([fetch('/api/stats').then(r=>r.json()),fetch('/api/history?limit=20').then(r=>r.json())]);
-	const stats=document.getElementById('stats');
-	stats.replaceChildren();
-	[['Total reports',s.total],['Average confidence',(s.avg_confidence||0)+'%'],['RAG memories',s.rag_count||0]].forEach(x=>{const card=document.createElement('div');card.className='card stat';const label=document.createElement('small');label.textContent=x[0];const value=document.createElement('strong');value.textContent=x[1];card.append(label,value);stats.append(card)});
-	const rows=document.getElementById('rows');rows.replaceChildren();
-	if(!h.claims.length){const row=document.createElement('tr');const cell=document.createElement('td');cell.colSpan=4;cell.className='muted';cell.textContent='No reports yet.';row.append(cell);rows.append(row);return}
-	h.claims.forEach(report=>{const row=document.createElement('tr');[report.text,report.verdict,report.confidence+'%',(report.created_at||'').slice(0,10)].forEach((value,index)=>{const cell=document.createElement('td');cell.textContent=value||'-';if(index===1)cell.className='tag';if(index===2)cell.className='mono';if(index===3)cell.className='muted';row.append(cell)});rows.append(row)});
-}load();
-</script>{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap">
+  <div>
+    <div class="muted mono" style="font-size:.78rem;letter-spacing:.08em">SYSTEM OVERVIEW</div>
+    <h2 style="margin:.25rem 0 0">Analytics dashboard</h2>
+  </div>
+  <button onclick="loadAll()">Refresh</button>
+</div>
+
+{# Stat cards — populated from /api/stats #}
+<div class="grid" id="stat-cards" style="margin-bottom:1.25rem">
+  <div class="card stat"><small>Total reports</small><strong id="s-total">{{ stats.total }}</strong></div>
+  <div class="card stat"><small>Avg confidence</small><strong id="s-avg">—</strong></div>
+  <div class="card stat"><small>Supported</small><strong id="s-supported" style="color:var(--green)">—</strong></div>
+  <div class="card stat"><small>Refuted</small><strong id="s-refuted" style="color:var(--red)">—</strong></div>
+  <div class="card stat"><small>Partial</small><strong id="s-partial" style="color:var(--amber)">—</strong></div>
+  <div class="card stat"><small>Insufficient</small><strong id="s-insuf" style="color:var(--muted)">—</strong></div>
+  <div class="card stat"><small>RAG memories</small><strong id="s-rag">—</strong></div>
+</div>
+
+{# Recent fact-checks table #}
+<section class="card">
+  <h3 style="margin-top:0">Recent fact-checks</h3>
+  <div style="overflow:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>Claim</th>
+          <th>Verdict</th>
+          <th>Confidence</th>
+          <th>Date</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="rows">
+        {% for claim in claims %}
+        <tr>
+          <td style="max-width:320px">
+            <span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ claim.text }}</span>
+          </td>
+          <td>
+            <span class="tag" style="color:{% if claim.verdict == 'SUPPORTED' %}var(--green){% elif claim.verdict == 'REFUTED' %}var(--red){% elif claim.verdict == 'PARTIALLY_SUPPORTED' %}var(--amber){% else %}var(--muted){% endif %}">
+              {{ claim.verdict.replace('_', ' ') }}
+            </span>
+          </td>
+          <td class="mono">{{ claim.confidence }}%</td>
+          <td class="muted">{{ claim.created_at[:10] }}</td>
+          <td><a class="cyan" href="{{ url_for('result', claim_id=claim.id) }}" style="font-size:.82rem">View →</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="muted" style="text-align:center;padding:2rem">No reports yet. <a class="cyan" href="{{ url_for('home') }}">Check a claim</a></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+async function loadAll() {
+  try {
+    const s = await fetch('/api/stats').then(r => r.json());
+    document.getElementById('s-total').textContent = s.total ?? '—';
+    document.getElementById('s-avg').textContent = (s.avg_confidence ?? 0) + '%';
+    document.getElementById('s-supported').textContent = s.supported_count ?? 0;
+    document.getElementById('s-refuted').textContent = s.refuted_count ?? 0;
+    document.getElementById('s-partial').textContent = s.partially_supported_count ?? 0;
+    document.getElementById('s-insuf').textContent = s.insufficient_evidence_count ?? 0;
+    document.getElementById('s-rag').textContent = s.rag_count ?? 0;
+  } catch (err) {
+    console.error('Failed to load stats:', err);
+  }
+}
+loadAll();
+</script>
+{% endblock %}

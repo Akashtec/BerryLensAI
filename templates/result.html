@@ -1,3 +1,190 @@
 {% extends 'base.html' %}
-{% block title %}BerryLens AI | Result{% endblock %}
-{% block content %}<div class="muted mono">VERIFICATION RESULT</div><h2 style="margin-top:.75rem">{{ report.claim }}</h2><section class="card" style="margin-top:1.5rem"><div class="mono accent" style="font-size:1.4rem">{{ report.verdict.value }}</div><p style="margin-top:1rem">{{ report.summary }}</p><p class="muted mono">Confidence: {{ report.confidence_pct }}% · {{ report.research_status.value }}</p></section>{% if report.all_evidence %}<section class="card"><h3>Evidence</h3>{% for item in report.all_evidence %}<p style="padding:.8rem 0;border-bottom:1px solid var(--line)"><a class="cyan" href="{{ item.source.url }}" target="_blank" rel="noopener">{{ item.source.title or item.source.url }}</a><br><span class="muted">{{ item.relevant_passage }}</span></p>{% endfor %}</section>{% endif %}{% endblock %}
+{% block title %}BerryLens AI | {{ report.claim[:60] }}{% endblock %}
+{% block content %}
+<div style="margin-bottom:2rem">
+  <a href="{{ url_for('home') }}" class="muted mono" style="text-decoration:none;font-size:.85rem">← New check</a>
+  <a href="{{ url_for('history') }}" class="muted mono" style="text-decoration:none;font-size:.85rem;margin-left:1.5rem">History →</a>
+</div>
+
+{# ── Verdict banner ─────────────────────────────────────────────── #}
+{% set verdict_color = {
+  'SUPPORTED': 'var(--green)',
+  'REFUTED': 'var(--red)',
+  'PARTIALLY_SUPPORTED': 'var(--amber)',
+  'INSUFFICIENT_EVIDENCE': 'var(--muted)'
+}.get(report.verdict.value, 'var(--muted)') %}
+
+<section class="card" style="border-left:4px solid {{ verdict_color }};margin-bottom:1.25rem">
+  <div class="muted mono" style="font-size:.78rem;letter-spacing:.08em;margin-bottom:.5rem">CLAIM</div>
+  <h2 style="margin:0 0 1.25rem;font-size:clamp(1.1rem,3vw,1.5rem);line-height:1.4">{{ report.claim }}</h2>
+
+  <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1rem">
+    <span class="mono" style="font-size:1.5rem;font-weight:700;color:{{ verdict_color }}">{{ report.verdict.value.replace('_', ' ') }}</span>
+    <span style="background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:8px;padding:.3rem .75rem;font-size:.82rem" class="mono">
+      Confidence: {{ report.confidence_pct }}%
+    </span>
+    {% if report.synthesis_provider %}
+    <span class="muted mono" style="font-size:.75rem">via {{ report.synthesis_provider }}</span>
+    {% endif %}
+  </div>
+
+  <div style="background:rgba(0,0,0,.15);border-radius:10px;padding:1rem;border:1px solid var(--line)">
+    <div class="muted mono" style="font-size:.75rem;margin-bottom:.4rem">EXPLANATION</div>
+    <p style="margin:0;line-height:1.7">{{ report.summary }}</p>
+  </div>
+
+  {% if report.reasoning %}
+  <p class="muted" style="margin:.75rem 0 0;font-size:.85rem">{{ report.reasoning }}</p>
+  {% endif %}
+</section>
+
+{# ── Stats bar ──────────────────────────────────────────────────── #}
+<div class="grid" style="margin-bottom:1.25rem">
+  <div class="card stat">
+    <small>Supporting</small>
+    <strong style="color:var(--green)">{{ report.supporting_evidence | length }}</strong>
+  </div>
+  <div class="card stat">
+    <small>Refuting</small>
+    <strong style="color:var(--red)">{{ report.refuting_evidence | length }}</strong>
+  </div>
+  <div class="card stat">
+    <small>Neutral</small>
+    <strong style="color:var(--muted)">{{ report.neutral_evidence | length }}</strong>
+  </div>
+  <div class="card stat">
+    <small>Sources checked</small>
+    <strong>{{ report.sources_checked }}</strong>
+  </div>
+</div>
+
+{# ── Supporting evidence ─────────────────────────────────────────── #}
+{% if report.supporting_evidence %}
+<section class="card" style="margin-bottom:1.25rem;border-left:3px solid var(--green)">
+  <h3 style="margin-top:0;color:var(--green)">Supporting Evidence</h3>
+  {% for item in report.supporting_evidence %}
+  <div style="padding:.85rem 0;border-bottom:1px solid var(--line)">
+    {% if not loop.last or loop.first %}{# always show border #}{% endif %}
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+      <div style="flex:1;min-width:0">
+        <a class="cyan" href="{{ item.source.url }}" target="_blank" rel="noopener noreferrer"
+           style="font-weight:600;word-break:break-word">{{ item.source.title or item.source.domain }}</a>
+        <div class="muted mono" style="font-size:.72rem;margin:.2rem 0 .5rem">
+          {{ item.source.domain }}
+          {% if item.source.tier %} · {{ item.source.tier | upper }}{% endif %}
+          · Relevance {{ (item.relevance_score * 100) | round | int }}%
+          · Quality {{ (item.quality_score * 100) | round | int }}%
+        </div>
+        <p class="muted" style="margin:0;font-size:.88rem;line-height:1.6">{{ item.relevant_passage }}</p>
+      </div>
+      <span class="tag" style="color:var(--green);white-space:nowrap;flex-shrink:0">SUPPORTS</span>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+{# ── Refuting evidence ───────────────────────────────────────────── #}
+{% if report.refuting_evidence %}
+<section class="card" style="margin-bottom:1.25rem;border-left:3px solid var(--red)">
+  <h3 style="margin-top:0;color:var(--red)">Refuting Evidence</h3>
+  {% for item in report.refuting_evidence %}
+  <div style="padding:.85rem 0;border-bottom:1px solid var(--line)">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+      <div style="flex:1;min-width:0">
+        <a class="cyan" href="{{ item.source.url }}" target="_blank" rel="noopener noreferrer"
+           style="font-weight:600;word-break:break-word">{{ item.source.title or item.source.domain }}</a>
+        <div class="muted mono" style="font-size:.72rem;margin:.2rem 0 .5rem">
+          {{ item.source.domain }}
+          {% if item.source.tier %} · {{ item.source.tier | upper }}{% endif %}
+          · Relevance {{ (item.relevance_score * 100) | round | int }}%
+          · Quality {{ (item.quality_score * 100) | round | int }}%
+        </div>
+        <p class="muted" style="margin:0;font-size:.88rem;line-height:1.6">{{ item.relevant_passage }}</p>
+      </div>
+      <span class="tag" style="color:var(--red);white-space:nowrap;flex-shrink:0">REFUTES</span>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+{# ── Neutral / unclear evidence ──────────────────────────────────── #}
+{% if report.neutral_evidence %}
+<section class="card" style="margin-bottom:1.25rem">
+  <h3 style="margin-top:0;color:var(--muted)">Neutral / Inconclusive Sources</h3>
+  {% for item in report.neutral_evidence %}
+  <div style="padding:.75rem 0;border-bottom:1px solid var(--line)">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+      <div style="flex:1;min-width:0">
+        <a class="cyan" href="{{ item.source.url }}" target="_blank" rel="noopener noreferrer"
+           style="word-break:break-word">{{ item.source.title or item.source.domain }}</a>
+        <div class="muted mono" style="font-size:.72rem;margin:.2rem 0 .4rem">
+          {{ item.source.domain }}
+          · Relevance {{ (item.relevance_score * 100) | round | int }}%
+        </div>
+        <p class="muted" style="margin:0;font-size:.85rem;line-height:1.55">{{ item.relevant_passage }}</p>
+      </div>
+      <span class="tag" style="white-space:nowrap;flex-shrink:0">NEUTRAL</span>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+{# ── Meta / caveats ──────────────────────────────────────────────── #}
+<section class="card" style="margin-bottom:1.25rem">
+  <h3 style="margin-top:0">Verification details</h3>
+  <table style="font-size:.85rem">
+    <tr>
+      <td class="muted" style="width:180px;padding:.4rem .5rem">Status</td>
+      <td class="mono" style="padding:.4rem .5rem">{{ report.research_status.value }}</td>
+    </tr>
+    <tr>
+      <td class="muted" style="padding:.4rem .5rem">Claim type</td>
+      <td class="mono" style="padding:.4rem .5rem">{{ report.claim_type.value }}</td>
+    </tr>
+    {% if report.processing_time_ms %}
+    <tr>
+      <td class="muted" style="padding:.4rem .5rem">Processing time</td>
+      <td class="mono" style="padding:.4rem .5rem">{{ (report.processing_time_ms / 1000) | round(1) }}s</td>
+    </tr>
+    {% endif %}
+    <tr>
+      <td class="muted" style="padding:.4rem .5rem">Verified at</td>
+      <td class="mono" style="padding:.4rem .5rem">{{ report.timestamp.strftime('%Y-%m-%d %H:%M UTC') if report.timestamp else '—' }}</td>
+    </tr>
+    {% if report.search_queries_used %}
+    <tr>
+      <td class="muted" style="padding:.4rem .5rem">Queries used</td>
+      <td style="padding:.4rem .5rem">
+        {% for q in report.search_queries_used %}
+        <span style="background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:5px;padding:.15rem .4rem;font-size:.78rem;display:inline-block;margin:.15rem .1rem">{{ q }}</span>
+        {% endfor %}
+      </td>
+    </tr>
+    {% endif %}
+    {% if report.provider_failures %}
+    <tr>
+      <td class="muted" style="padding:.4rem .5rem">Provider notes</td>
+      <td class="muted mono" style="padding:.4rem .5rem;font-size:.78rem">{{ report.provider_failures | join(', ') }}</td>
+    </tr>
+    {% endif %}
+  </table>
+
+  {% if report.uncertainties %}
+  <div style="margin-top:1rem;padding:.75rem;background:rgba(240,179,91,.07);border:1px solid rgba(240,179,91,.2);border-radius:8px">
+    <div class="mono" style="font-size:.75rem;color:var(--amber);margin-bottom:.35rem">CAVEATS</div>
+    {% for uncertainty in report.uncertainties %}
+    <p class="muted" style="margin:.2rem 0;font-size:.85rem">{{ uncertainty }}</p>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if report.from_cache %}
+  <div style="margin-top:.75rem;padding:.6rem .85rem;background:rgba(119,215,198,.07);border:1px solid rgba(119,215,198,.2);border-radius:8px">
+    <span class="muted" style="font-size:.82rem">⚡ This result was retrieved from semantic memory (cached). It may not reflect the most recent information.</span>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

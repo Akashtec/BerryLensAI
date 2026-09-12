@@ -2,6 +2,22 @@
 
 BerryLens is an evidence-grounded claim verification application. It retrieves web evidence, assesses source-level stance, computes a deterministic verdict, and exposes uncertainty when evidence is weak or unavailable.
 
+## Project Soul
+
+BerryLens is being built as a real AI engineering system, not a demo that simply asks an LLM whether something is true.
+
+Start here:
+
+- [BerryLens Soul](docs/BERRYLENS_SOUL.md)
+- [AI Architecture](docs/AI_ARCHITECTURE.md)
+- [AI Engineering Guide](docs/AI_ENGINEERING_GUIDE.md)
+- [AI Model Comparison](docs/AI_MODEL_COMPARISON.md)
+- [Verification Policy](docs/VERIFICATION_POLICY.md)
+- [Data Quality](docs/DATA_QUALITY.md)
+- [Failure Modes](docs/FAILURE_MODES.md)
+
+The guiding rule is simple: a technology is implemented only when it has code, purpose, documentation, tests, and verification. Otherwise it is marked as partial, optional, or planned.
+
 ## Local Setup
 
 Requires Python 3.12 or newer.
@@ -25,17 +41,17 @@ Open `http://127.0.0.1:5000`.
 
 ## API
 
-`POST /api/v1/verify`
+`POST /api/verify` or `POST /api/v1/verify`
 
 ```json
 {"claim": "Water freezes at 0 degrees Celsius at standard pressure."}
 ```
 
-The response is a `VerificationReport` containing `TRUE`, `FALSE`, `MIXED`, `UNCERTAIN`, or `ERROR`, a numeric confidence in `[0, 1]`, evidence groups, research status, queries, source count, and timing metadata.
+The response is a `VerificationReport` containing `SUPPORTED`, `REFUTED`, `PARTIALLY_SUPPORTED`, or `INSUFFICIENT_EVIDENCE`, a numeric evidence score in `[0, 1]`, evidence groups, research status, queries, source count, and timing metadata.
 
 Other endpoints:
 
-- `GET /api/v1/result/<id>`
+- `GET /api/reports/<id>` and `GET /api/v1/result/<id>`
 - `GET /api/v1/history?limit=20&offset=0`
 - `GET /api/v1/stats`
 - `POST /check` remains as a compatibility alias
@@ -62,12 +78,12 @@ Browser -> Flask API -> VerificationService
         -> Claim/query generation
         -> Tavily retrieval and deterministic normalization/deduplication
         -> source-level stance assessment
-        -> deterministic verdict engine
+        -> deterministic evidence-based verdict engine
         -> SQLite report persistence and optional Chroma historical memory
         -> safe structured response
 ```
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/ARCHITECTURE_AUDIT.md](docs/ARCHITECTURE_AUDIT.md).
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/AI_ARCHITECTURE.md](docs/AI_ARCHITECTURE.md), and [docs/ARCHITECTURE_AUDIT.md](docs/ARCHITECTURE_AUDIT.md).
 
 ## Deployment
 

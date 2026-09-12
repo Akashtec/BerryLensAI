@@ -1,3 +1,54 @@
 {% extends 'base.html' %}
 {% block title %}BerryLens AI | History{% endblock %}
-{% block content %}<div class="muted mono">ARCHIVE</div><h2>Fact-check history</h2><section class="card" style="margin-top:1.5rem;overflow:auto"><table><thead><tr><th>Claim</th><th>Verdict</th><th>Confidence</th><th>Status</th><th>Created</th></tr></thead><tbody>{% for claim in claims %}<tr><td><a class="cyan" href="{{ url_for('result', claim_id=claim.id) }}">{{ claim.text }}</a></td><td class="tag">{{ claim.verdict or 'PENDING' }}</td><td class="mono">{{ claim.confidence if claim.confidence is not none else '-' }}%</td><td>{{ claim.status }}</td><td class="muted">{{ claim.created_at }}</td></tr>{% else %}<tr><td colspan="5" class="muted">No claims yet.</td></tr>{% endfor %}</tbody></table></section>{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap">
+  <div>
+    <div class="muted mono" style="font-size:.78rem;letter-spacing:.08em">ARCHIVE</div>
+    <h2 style="margin:.25rem 0 0">Fact-check history</h2>
+  </div>
+  <a href="{{ url_for('home') }}" class="button secondary">New check</a>
+</div>
+
+<section class="card" style="overflow:auto">
+  {% if claims %}
+  <table>
+    <thead>
+      <tr>
+        <th>Claim</th>
+        <th>Verdict</th>
+        <th>Confidence</th>
+        <th>Date</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for claim in claims %}
+      <tr>
+        <td style="max-width:340px">
+          <a class="cyan" href="{{ url_for('result', claim_id=claim.id) }}"
+             style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:340px">
+            {{ claim.text }}
+          </a>
+        </td>
+        <td>
+          <span class="tag" style="color:{% if claim.verdict == 'SUPPORTED' %}var(--green){% elif claim.verdict == 'REFUTED' %}var(--red){% elif claim.verdict == 'PARTIALLY_SUPPORTED' %}var(--amber){% else %}var(--muted){% endif %}">
+            {{ (claim.verdict or 'PENDING').replace('_', ' ') }}
+          </span>
+        </td>
+        <td class="mono">
+          {% if claim.confidence is not none %}{{ claim.confidence }}%{% else %}—{% endif %}
+        </td>
+        <td class="muted">{{ claim.created_at[:10] if claim.created_at else '—' }}</td>
+        <td><a class="cyan" href="{{ url_for('result', claim_id=claim.id) }}" style="font-size:.82rem">View →</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div style="text-align:center;padding:3rem 1rem">
+    <p class="muted" style="font-size:1.05rem">No claims verified yet.</p>
+    <a href="{{ url_for('home') }}" class="button" style="display:inline-block;margin-top:1rem">Check your first claim</a>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

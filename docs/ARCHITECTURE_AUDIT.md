@@ -4,7 +4,7 @@
 **Scope:** Current repository before architectural changes  
 **Runtime verified:** Python 3.12.10, project virtual environment, Flask development server
 
-Provider references in this historical audit describe the pre-Mistral state. The runtime now uses Mistral through the Hugging Face Inference API.
+Provider references in this historical audit describe the pre-Mistral state. The runtime now uses Mistral through the Hugging Face Inference API. For the current recovery audit, prefer `docs/PROJECT_AUDIT.md`.
 
 ## Executive Summary
 
@@ -82,7 +82,7 @@ On a cache hit, Chroma results are returned immediately and the fresh research p
 - Evidence items do not carry publication time, domain, source type, content hash, stance, quality, or investigation identity.
 - Sources are not evaluated for independence, entity match, syndication, or direct support of the proposition.
 - The analyst receives a flat text block and controls the verdict and numeric confidence without a documented scoring basis.
-- Public verdict literals are `SUPPORTED`, `REFUTED`, `INSUFFICIENT EVIDENCE`, and `MISLEADING`, while the requested public contract is `TRUE`, `FALSE`, or `UNCERTAIN`.
+- Public verdict literals now use the mission contract: `SUPPORTED`, `REFUTED`, `PARTIALLY_SUPPORTED`, and `INSUFFICIENT_EVIDENCE`.
 - Compound claims are not decomposed into atomic propositions.
 - Research failure is printed and hidden as an empty/partial evidence set rather than represented as a structured status.
 - Chroma cache results can silently replace fresh research, including for time-sensitive claims.
@@ -107,7 +107,7 @@ Severity uses `CRITICAL`, `HIGH`, `MEDIUM`, and `LOW`. Each item includes the pr
 | User, retrieved, and model content is inserted with `innerHTML` | `templates/index.html` and `templates/dashboard.html` build HTML from response data | **FIX:** use text-safe DOM construction or escaping and add security headers/CSP |
 | Valid `POST /verify` is broken and the active failure handler is unreachable | `app.py` | **REMOVE/REFACTOR:** route all submissions through one tested service and delete dead legacy code |
 | Provider clients and embedding model initialize at import/startup | agent modules and `BerryLensMemory` | **REFACTOR:** lazy initialization, explicit health checks, and actionable startup errors |
-| The quota fallback returns `UNVERIFIABLE`, which violates the Pydantic verdict literal | `agents/analyst_agent.py` versus `models/evidence.py` | **FIX:** normalize provider failures to structured `UNCERTAIN`/failure status |
+| Provider fallback literals can drift from the public contract | `agents/analyst_agent.py` versus `models/evidence.py` | **FIXED:** provider failures now normalize to structured `INSUFFICIENT_EVIDENCE`/failure status |
 | Errors are returned to clients as raw `str(error)` | `app.py` `/check` exception handler | **FIX:** return stable public error envelopes and log internal details without secrets |
 | SQLite and Chroma persistence are not coordinated | SQLite is written before Chroma; later failures return 500 and leave partial state | **REFACTOR:** persist investigation state transactionally and make Chroma best-effort/repairable |
 
@@ -153,7 +153,7 @@ Frontend
       -> ResearchService (Mistral planning + Tavily retrieval)
        -> EvidenceNormalizer/Deduplicator
        -> EvidenceEvaluator (deterministic metadata plus one structured LLM judgment where needed)
-       -> VerdictService (strict TRUE/FALSE/UNCERTAIN contract)
+       -> VerdictService (strict SUPPORTED/REFUTED/PARTIALLY_SUPPORTED/INSUFFICIENT_EVIDENCE contract)
        -> SQLite investigation persistence
        -> optional historical Chroma retrieval, never authoritative over fresh evidence
 ```
@@ -184,10 +184,10 @@ PROVIDER_TIMEOUT_SECONDS
 ### Phase 2: Contract and evidence quality
 
 1. Add `Claim`, `SearchQuery`, `ResearchResult`, `EvidenceAssessment`, and `VerificationReport` schemas.
-2. Normalize verdicts to public `TRUE`, `FALSE`, and `UNCERTAIN`.
+2. Normalize verdicts to public `SUPPORTED`, `REFUTED`, `PARTIALLY_SUPPORTED`, and `INSUFFICIENT_EVIDENCE`.
 3. Represent partial/failed research explicitly.
 4. Add URL normalization, source metadata, content hashes, duplicate detection, stance, and uncertainty fields.
-5. Validate Mistral structured output and convert quota/JSON failures into `UNCERTAIN` with a useful status.
+5. Validate Mistral structured output and convert quota/JSON failures into `INSUFFICIENT_EVIDENCE` with a useful status.
 
 ### Phase 3: Persistence, RAG, and observability
 
@@ -222,7 +222,7 @@ The first foundation slice has now been implemented:
 
 - `config.py` centralizes project-root environment loading and configurable research limits.
 - `models/schemas.py` defines validated claim, source, evidence assessment, research status, request, and report contracts.
-- `verdict_engine.py` computes a deterministic public `TRUE`/`FALSE`/`UNCERTAIN` verdict from assessed evidence and applies a documented thin-evidence penalty.
+- `verdict_engine.py` computes a deterministic public `SUPPORTED`/`REFUTED`/`PARTIALLY_SUPPORTED`/`INSUFFICIENT_EVIDENCE` verdict from assessed evidence and applies a documented thin-evidence penalty.
 - `verification_service.py` is the shared orchestration boundary for the web path and CLI.
 - `db_manager.py/db_manager.py` now includes a backward-compatible full-report JSON store, and the web path writes each validated report to it while retaining legacy dashboard rows.
 - `POST /api/v1/verify` is available, while `/check` remains a compatibility alias.

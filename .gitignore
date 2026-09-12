@@ -29,3 +29,5 @@ htmlcov/
 .idea/
 Thumbs.db
 .DS_Store
+Add-Content .gitignore "*.zip"
+Add-Content .gitignore "__pycache__/"

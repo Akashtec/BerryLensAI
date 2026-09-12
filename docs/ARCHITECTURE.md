@@ -1,5 +1,7 @@
 # BerryLens AI Architecture
 
+For the project philosophy and long-term AI engineering vision, see `docs/BERRYLENS_SOUL.md`. For the AI-specific layer map, see `docs/AI_ARCHITECTURE.md`.
+
 ## Pipeline
 
 BerryLens uses one orchestration path in `verification_service.py`:
@@ -9,7 +11,7 @@ BerryLens uses one orchestration path in `verification_service.py`:
 3. **Evidence Retrieval:** query Tavily and normalize results into typed evidence objects.
 4. **Evidence Quality Assessment:** normalize domains, assign transparent tier priors, deduplicate URLs/passages, and classify each passage as `SUPPORTS`, `REFUTES`, `NEUTRAL`, or `UNCLEAR`.
 5. **Synthesis:** use the Mistral synthesis boundary through Hugging Face to summarize retrieved material. Its output is not the final authority.
-6. **Verdict Generation:** `verdict_engine.py` combines validated stance, relevance, stance confidence, credibility prior, and evidence volume. Sparse or conflicting evidence abstains or returns `MIXED`.
+6. **Verdict Generation:** `verdict_engine.py` combines validated stance, relevance, stance confidence, credibility prior, and evidence volume. Sparse evidence returns `INSUFFICIENT_EVIDENCE`; balanced conflicting evidence returns `PARTIALLY_SUPPORTED`.
 7. **Explanation:** `VerificationReport` carries the summary, reasoning note, evidence groups, uncertainties, queries, status, timing, and source count.
 
 The verdict engine is deterministic for the same assessments and configuration. Confidence is a bounded decision score, not a calibrated probability claim.
@@ -18,7 +20,7 @@ The verdict engine is deterministic for the same assessments and configuration. 
 
 `models/schemas.py` is the canonical contract module. It defines `ClaimAnalysis`, `ResearchPlan`, `Source`, `RawEvidence`, `EvidenceAssessment`, `SynthesisResult`, `VerificationReport`, verdict states, stance states, and research status.
 
-Provider failures return safe `ERROR`/`FAILED` reports or source-level `UNCLEAR` assessments. They do not manufacture evidence or expose internal exception text through the API.
+Provider failures return safe `INSUFFICIENT_EVIDENCE`/`FAILED` reports or source-level `UNCLEAR` assessments. They do not manufacture evidence or expose internal exception text through the API.
 
 ## Storage
 
@@ -28,8 +30,10 @@ SQLite stores structured verification reports as JSON in the `verifications` tab
 
 The versioned API is:
 
+- `POST /api/verify`
 - `POST /api/v1/verify`
 - `POST /api/v1/verify/stream`
+- `GET /api/reports/<id>`
 - `GET /api/v1/result/<id>`
 - `GET /api/v1/history`
 - `GET /api/v1/stats`

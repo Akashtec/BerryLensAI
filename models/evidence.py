@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Literal
 
 
@@ -19,8 +19,26 @@ class VerificationResult(BaseModel):
     verdict: Literal[
         "SUPPORTED",
         "REFUTED",
-        "INSUFFICIENT EVIDENCE",
-        "MISLEADING"
+        "PARTIALLY_SUPPORTED",
+        "INSUFFICIENT_EVIDENCE",
     ]
     confidence: int = Field(ge=0, le=100)
     explanation: str
+    provider_used: str | None = None
+    provider_failures: list[str] = Field(default_factory=list)
+
+    @field_validator("verdict", mode="before")
+    @classmethod
+    def normalize_verdict(cls, value):
+        legacy_map = {
+            "TRUE": "SUPPORTED",
+            "FALSE": "REFUTED",
+            "MIXED": "PARTIALLY_SUPPORTED",
+            "MISLEADING": "PARTIALLY_SUPPORTED",
+            "UNCERTAIN": "INSUFFICIENT_EVIDENCE",
+            "ERROR": "INSUFFICIENT_EVIDENCE",
+            "INSUFFICIENT EVIDENCE": "INSUFFICIENT_EVIDENCE",
+            "INSUFFICIENT_EVIDENCE": "INSUFFICIENT_EVIDENCE",
+        }
+        normalized = str(value).strip().upper().replace("-", "_")
+        return legacy_map.get(normalized, value)

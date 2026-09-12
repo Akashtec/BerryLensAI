@@ -9,7 +9,7 @@ def test_cached_legacy_supported_result_maps_to_true():
         0.0,
     )
 
-    assert report.verdict is Verdict.TRUE
+    assert report.verdict is Verdict.SUPPORTED
     assert report.confidence == 0.8
     assert report.research_status is ResearchStatus.CACHED
 
@@ -21,8 +21,20 @@ def test_cached_unknown_result_abstains():
         0.0,
     )
 
-    assert report.verdict is Verdict.UNCERTAIN
+    assert report.verdict is Verdict.INSUFFICIENT_EVIDENCE
     assert report.confidence == 0.0
+
+
+def test_legacy_report_verdicts_normalize_to_mission_contract():
+    report = VerificationReport(
+        claim="A sufficiently long claim.",
+        verdict="MIXED",
+        confidence=0.5,
+        summary="Legacy record.",
+        research_status=ResearchStatus.COMPLETE,
+    )
+
+    assert report.verdict is Verdict.PARTIALLY_SUPPORTED
 
 
 def test_query_provider_failure_returns_safe_uncertain_report(monkeypatch):
@@ -39,14 +51,14 @@ def test_query_provider_failure_returns_safe_uncertain_report(monkeypatch):
         service_module,
         "analyze_evidence",
         lambda claim, evidence: VerificationResult(
-            verdict="INSUFFICIENT EVIDENCE",
+            verdict="INSUFFICIENT_EVIDENCE",
             confidence=0,
             explanation="No evidence available.",
         ),
     )
     report = VerificationService().verify("A sufficiently long claim.")
 
-    assert report.verdict is Verdict.UNCERTAIN
+    assert report.verdict is Verdict.INSUFFICIENT_EVIDENCE
     assert report.research_status is ResearchStatus.FAILED
     assert "provider timeout" not in report.summary
 
@@ -77,7 +89,7 @@ def test_synthesis_provider_failure_returns_safe_uncertain_result(monkeypatch):
     monkeypatch.setattr(analyst_agent, "_generate_json", fail)
     result = analyst_agent.analyze_evidence("A sufficiently long claim.", [])
 
-    assert result.verdict == "INSUFFICIENT EVIDENCE"
+    assert result.verdict == "INSUFFICIENT_EVIDENCE"
     assert result.confidence == 0
 
 
@@ -94,7 +106,7 @@ def test_service_connects_all_pipeline_stages_and_persists(monkeypatch):
         service_module,
         "analyze_evidence",
         lambda claim, evidence: VerificationResult(
-            verdict="INSUFFICIENT EVIDENCE",
+            verdict="INSUFFICIENT_EVIDENCE",
             confidence=0,
             explanation="No evidence available.",
         ),
@@ -107,8 +119,8 @@ def test_service_connects_all_pipeline_stages_and_persists(monkeypatch):
         "A sufficiently long claim.", user_id=7
     )
 
-    assert report.verdict is Verdict.UNCERTAIN
-    assert calls == [("A sufficiently long claim.", 7, Verdict.UNCERTAIN)]
+    assert report.verdict is Verdict.INSUFFICIENT_EVIDENCE
+    assert calls == [("A sufficiently long claim.", 7, Verdict.INSUFFICIENT_EVIDENCE)]
 
 
 def test_fresh_verification_does_not_return_historical_match(monkeypatch):
@@ -126,7 +138,7 @@ def test_fresh_verification_does_not_return_historical_match(monkeypatch):
     )
 
     assert report.from_cache is False
-    assert report.verdict is Verdict.UNCERTAIN
+    assert report.verdict is Verdict.INSUFFICIENT_EVIDENCE
 
 
 def test_persistence_failure_does_not_hide_report(monkeypatch):
@@ -142,5 +154,5 @@ def test_persistence_failure_does_not_hide_report(monkeypatch):
         "A sufficiently long claim."
     )
 
-    assert report.verdict is Verdict.UNCERTAIN
+    assert report.verdict is Verdict.INSUFFICIENT_EVIDENCE
     assert report.research_status is ResearchStatus.FAILED
